@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_ckeditor_5',
     'channels',
+    'blog',
 ]
 
 MIDDLEWARE = [
