@@ -33,6 +33,8 @@ INSTALLED_APPS = [
     'django_ckeditor_5',
     'channels',
     'blog',
+    'subplans',
+    'programs',
 ]
 
 MIDDLEWARE = [
