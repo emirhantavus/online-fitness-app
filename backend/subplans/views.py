@@ -5,10 +5,15 @@ from django.shortcuts import get_object_or_404
 from rest_framework import status
 from .models import SubPlan, SubPlanFeature , Payment, UserSubscription
 from .serializers import SubPlanFeatureSerializer, SubPlanSerializer, PaymentSerializer
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ModelViewSet
 from django.utils import timezone
-from datetime import timedelta, datetime, timezone as dt_timezone
+from datetime import timedelta, datetime, timezone
+from programs.models import ReadyProgram, TrainerStudentProgram, ReadyExercise, Evolution, Exercise
+from django.contrib.auth import get_user_model
+from django.utils import timezone as dj_timezone
+
+User = get_user_model()
 
 
 class SubPlanView(APIView):
