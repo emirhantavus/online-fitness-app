@@ -5,6 +5,7 @@ from .views import (
     VideoViewSet,
     VideoDetailViewSet,
     ContactView,
+    NutritionAPIView
 )
 
 router = DefaultRouter()
@@ -15,4 +16,5 @@ urlpatterns = [
       path("", include(router.urls)),
       path("videos/<slug:slug>/detail/", VideoDetailViewSet.as_view(), name="video-detail"),
       path("contact/", ContactView.as_view(), name="contact"),
+      path('nutrition/', NutritionAPIView.as_view(),name='nutrition-api'),
 ]
