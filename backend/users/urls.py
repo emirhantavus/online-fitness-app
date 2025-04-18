@@ -11,6 +11,7 @@ from .views import (
     PasswordChangeView,
     MyTokenObtainPairView,
     MyTokenRefreshView,
+    UserListView,
 )
 
 urlpatterns = [
@@ -28,4 +29,6 @@ urlpatterns = [
 
     path("token/", MyTokenObtainPairView.as_view(), name="token-obtain-pair"),
     path("token/refresh/", MyTokenRefreshView.as_view(), name="token-refresh"),
+    
+    path("cusers/", UserListView.as_view(), name="users"),
 ]

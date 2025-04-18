@@ -4,7 +4,7 @@ from .serializers import (UserProfileSerializer, UserSerializer,
 from .models import (User, UserProfile)
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status , generics
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate , login ,logout
 from rest_framework.permissions import AllowAny , IsAuthenticated
@@ -16,7 +16,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode , urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.core.mail import send_mail
-
+from messages.serializers import ChatUserSerializer
 
 
 class UserProfileView(APIView):
@@ -189,3 +189,8 @@ class PasswordChangeView(APIView):
             serializer.save()
             return Response({"message": "Password has been changed."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = ChatUserSerializer
+    permission_classes = [IsAuthenticated]
