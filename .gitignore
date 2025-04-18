@@ -5,3 +5,4 @@ __pycache__/
 *.py[cod]
 backend/__pycache__/
 backend/staticfiles/
+frontend/node_modules/
