@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from .serializers import (UserProfileSerializer, UserSerializer,
-                          PasswordResetConfirmSerializer, PasswordChangeSerializer , PasswordResetSerializer)
+                          PasswordResetConfirmSerializer, PasswordChangeSerializer , PasswordResetSerializer,
+                          TrainerSerializer, StudentSerializer)
 from .models import (User, UserProfile)
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -17,7 +18,9 @@ from django.utils.http import urlsafe_base64_encode , urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.core.mail import send_mail
 from messages.serializers import ChatUserSerializer
-
+from rest_framework.viewsets import ModelViewSet
+from core.permissions import IsTrainer
+from programs.models import TrainerStudentProgram
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -50,8 +53,11 @@ class SpecificUserProfileView(APIView):
         serializer = UserProfileSerializer(user_profile)
         return Response(serializer.data)
     
-    def put(self, request, user_id):
+    def patch(self, request, user_id):
         try:
+            if request.user.id != int(user_id):
+                return Response({"error":"U do not have permission to edit this profile."},status=status.HTTP_403_FORBIDDEN)
+            
             user_profile = get_object_or_404(UserProfile, user__id=user_id)
             serializer = UserProfileSerializer(user_profile, data=request.data, partial=True)
             if serializer.is_valid():
@@ -194,3 +200,33 @@ class UserListView(generics.ListAPIView):
     queryset = User.objects.all()
     serializer_class = ChatUserSerializer
     permission_classes = [IsAuthenticated]
+    
+    
+class TrainerViewSet(ModelViewSet):
+    queryset = User.objects.filter(is_trainer=True)
+    serializer_class = TrainerSerializer
+    permission_classes = [AllowAny]
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+    
+class StudentViewSet(ModelViewSet):
+    serializer_class = StudentSerializer
+    permission_classes = [IsAuthenticated, IsTrainer]
+    
+    def get_queryset(self):
+        trainer = self.request.user
+        if not trainer.is_trainer:
+            return User.objects.none()
+        student_ids = TrainerStudentProgram.objects.filter(trainer=trainer).values_list('student_id', flat=True)
+        return User.objects.filter(id__in=student_ids, is_trainer=False).distinct()

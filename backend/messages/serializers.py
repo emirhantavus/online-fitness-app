@@ -18,5 +18,5 @@ class MessageSerializer(serializers.ModelSerializer):
             fields = ['id', 'sender', 'receiver', 'message_text', 'timestamp']
 
       def create(self, validated_data):
-            sender = self.context['request'].user
-            return Message.objects.create(sender=sender, **validated_data)
+            validated_data.pop('sender',None)
+            return Message.objects.create(sender=self.context['request'].user,**validated_data)

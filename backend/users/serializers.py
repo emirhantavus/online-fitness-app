@@ -11,7 +11,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
       
       class Meta:
             model = UserProfile
-            fields = ['bio', 'location', 'profile_pic', 'first_name', 'last_name', 'email'] 
+            fields = ['id','bio', 'location', 'profile_pic', 'first_name', 'last_name', 'email'] 
           
       def update(self, instance, validated_data):
             user_data = validated_data.pop('user', {})
@@ -33,7 +33,7 @@ class UserSerializer(serializers.ModelSerializer):
       
       class Meta:
             model = User
-            fields = ['email', 'first_name', 'last_name', 'password', 'userprofile']
+            fields = ['id','email', 'first_name', 'last_name', 'password', 'userprofile']
             extra_kwargs = {'password': {'write_only': True}} 
             
       def create(self, validated_data):
@@ -69,6 +69,11 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             user.save()
             return data
 
+class UserProfileSerializerTwo(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ['bio', 'location', 'profile_pic']
+
 class PasswordChangeSerializer(serializers.Serializer):
       old_password = serializers.CharField(write_only=True)
       new_password = serializers.CharField(write_only=True)
@@ -83,3 +88,32 @@ class PasswordChangeSerializer(serializers.Serializer):
             user = self.context['request'].user
             user.set_password(self.validated_data['new_password'])
             user.save()
+            
+            
+            
+class TrainerSerializer(serializers.ModelSerializer):
+      userprofile = UserProfileSerializerTwo()
+      class Meta:
+            model = User
+            fields = ('id', 'email', 'first_name', 'last_name', 'monthly_rate','userprofile')
+        
+      def update(self, instance, validated_data):
+            userprofile_data = validated_data.pop('userprofile', None)
+
+            # Update User instance
+            instance.first_name = validated_data.get('first_name', instance.first_name)
+            instance.last_name = validated_data.get('last_name', instance.last_name)
+            instance.monthly_rate = validated_data.get('monthly_rate', instance.monthly_rate)
+            instance.save()
+
+            # Update UserProfile instance
+            if userprofile_data:
+                  UserProfile.objects.update_or_create(user=instance, defaults=userprofile_data)
+
+            return instance
+        
+class StudentSerializer(serializers.ModelSerializer):
+      userprofile = UserProfileSerializer()
+      class Meta:
+            model = User
+            fields = ('id', 'email', 'first_name', 'last_name','userprofile')

@@ -101,12 +101,6 @@ const router = createRouter({
       props:true,
     },
     {
-      path:'/trainer-profile/:userId',
-      name:'trainerprofile',
-      component: UserProfileView,
-      props:true,
-    },
-    {
       path:'/trainer-dashboard',
       name:'trainerdashboard',
       component:TrainerDashboardView

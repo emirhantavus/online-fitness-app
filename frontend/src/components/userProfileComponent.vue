@@ -10,7 +10,7 @@
           <p><strong>First Name:</strong> {{ formProfile.first_name }}</p>
           <p><strong>Last Name:</strong> {{ formProfile.last_name }}</p>
           <p><strong>Email:</strong> {{ formProfile.email }}</p>
-          <p v-if="formProfile.monthly_rate"><strong>Monthly Salary:</strong> ${{ formProfile.monthly_rate }}</p>
+          <p v-if="isTrainer && formProfile.monthly_rate"><strong>Monthly Salary:</strong> ${{ formProfile.monthly_rate }}</p>
         </div>
       </div>
       <div class="profile-middle">
@@ -29,7 +29,7 @@
               <label for="last_name">Last Name:</label>
               <input type="text" id="last_name" v-model="formProfile.last_name" />
             </div>
-            <div v-if="formProfile.monthly_rate" class="form-group">
+            <div v-if="isTrainer && isCurrentUserProfile" class="form-group">
               <label for="monthly_rate">Monthly Salary:</label>
               <input type="number" id="monthly_rate" v-model="formProfile.monthly_rate" />
             </div>
@@ -64,6 +64,8 @@ export default defineComponent({
   },
   setup() {
     const route = useRoute();
+    const isTrainer = localStorage.getItem('is_trainer') === 'true';
+    const currentUserId = localStorage.getItem('user_id');
     const profile = ref<any>(null);
     const formProfile = ref<any>({
       id: 0,
@@ -82,13 +84,12 @@ export default defineComponent({
 
     const fetchProfile = async () => {
       const userId = route.params.userId as string;
-      const isTrainer = localStorage.getItem('is_trainer') === 'true';
       const endpoint = isTrainer ? `/api/trainers/${userId}/` : `/api/profile/${userId}/`;
       try {
         const response = await apiClient.get(endpoint);
         profile.value = response.data;
         formProfile.value = { ...response.data };
-        isCurrentUserProfile.value = userId === localStorage.getItem('user_id');
+        isCurrentUserProfile.value = userId === currentUserId;
       } catch (error) {
         console.error('Error fetching profile:', error);
       }
@@ -102,18 +103,18 @@ export default defineComponent({
     };
 
     const updateProfile = async () => {
-      const endpoint = isCurrentUserProfile.value && localStorage.getItem('is_trainer') === 'true'
+      const endpoint = isTrainer
         ? `/api/trainers/${formProfile.value.id}/`
         : `/api/profile/${formProfile.value.id}/`;
 
       const formData = new FormData();
       formData.append('first_name', formProfile.value.first_name);
       formData.append('last_name', formProfile.value.last_name);
+      formData.append('bio', formProfile.value.bio);
 
-      if (formProfile.value.monthly_rate)
+      if (isTrainer && formProfile.value.monthly_rate)
         formData.append('monthly_rate', formProfile.value.monthly_rate);
-      if (formProfile.value.bio)
-        formData.append('bio', formProfile.value.bio);
+
       if (selectedFile.value)
         formData.append('profile_pic', selectedFile.value);
 
@@ -135,7 +136,8 @@ export default defineComponent({
     };
 
     const getImage = (imagePath?: string) => {
-      return imagePath ? imagePath : defaultAvatar;
+      if (!imagePath) return defaultAvatar;
+      return imagePath.startsWith('/media') ? `http://localhost:8000${imagePath}` : imagePath;
     };
 
     onMounted(fetchProfile);
@@ -150,6 +152,7 @@ export default defineComponent({
       isCurrentUserProfile,
       getImage,
       editor,
+      isTrainer
     };
   }
 });

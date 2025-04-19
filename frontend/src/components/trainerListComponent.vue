@@ -92,7 +92,7 @@ export default defineComponent({
     };
 
     const goToProfile = (trainerId: number) => {
-      router.push(`/trainer-profile/${trainerId}`);
+      router.push(`/profile/${trainerId}`);
     };
 
     return { trainers, getImage, buyPlan, goToProfile, isMobile };

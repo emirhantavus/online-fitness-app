@@ -12,7 +12,15 @@ from .views import (
     MyTokenObtainPairView,
     MyTokenRefreshView,
     UserListView,
+    TrainerViewSet,
+    StudentViewSet,
 )
+from django.conf.urls.static import static
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
+router.register(r'trainers', TrainerViewSet, basename='trainer')
+router.register(r'students', StudentViewSet, basename='student')
 
 urlpatterns = [
     path("register/", UserRegisterView.as_view(), name="register"),
@@ -32,3 +40,4 @@ urlpatterns = [
     
     path("cusers/", UserListView.as_view(), name="users"),
 ]
+urlpatterns += router.urls
