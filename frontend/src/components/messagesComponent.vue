@@ -1,15 +1,9 @@
 <template>
   <div class="container">
     <div class="sidebar">
-      <h3>Users</h3>
-      <input v-model="searchQuery" @input="filterUsers" placeholder="Search users..." class="search-input" />
-      <div
-        v-if="searchQuery.length >= 1"
-        v-for="user in filteredUsers"
-        :key="user.id"
-        @click="selectUser(user)"
-        class="user-item"
-      >
+      <h3>Conversations</h3>
+      <input v-model="searchQuery" @input="filterUsers" placeholder="Search..." class="search-input" />
+      <div v-for="user in conversationUsers" :key="user.id" @click="selectUser(user)" class="user-item">
         {{ user.email }}
         <span v-if="lastMessages[user.id]" class="last-message">{{ lastMessages[user.id] }}</span>
       </div>
@@ -21,14 +15,13 @@
         </div>
         <div class="chat-messages">
           <div v-for="msg in messages" :key="msg.id" class="message">
-            <strong>{{ msg.sender === userId ? userProfile.email : selectedUser.email }}:</strong>
-            {{ msg.message_text }}
+            <strong>{{ msg.sender === userId ? userProfile.email : selectedUser.email }}:</strong> {{ msg.message_text }}
           </div>
         </div>
         <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Type a message..." />
       </div>
       <div v-else>
-        <h3>Please select a user to chat with</h3>
+        <h3>Select a conversation</h3>
       </div>
     </div>
   </div>
@@ -38,37 +31,54 @@
 import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue';
 import axios from '@/plugins/axios';
 
+interface User {
+  id: number;
+  email: string;
+}
+
+interface Message {
+  id: number;
+  sender: number;
+  receiver: number;
+  message_text: string;
+}
+
 export default defineComponent({
   name: 'MessagesComponent',
   setup() {
-    const users = ref([]);
-    const filteredUsers = ref([]);
-    const messages = ref([]);
+    const users = ref<User[]>([]);
+    const conversationUsers = ref<User[]>([]);
+    const messages = ref<Message[]>([]);
+    const selectedUser = ref<User | null>(null);
     const newMessage = ref('');
-    const selectedUser = ref(null);
     const userId = parseInt(localStorage.getItem('user_id') || '0');
     const searchQuery = ref('');
-    const userProfile = ref({ email: '' });
+    const userProfile = ref<User>({ id: 0, email: '' });
     const lastMessages = ref<Record<number, string>>({});
     let socket: WebSocket | null = null;
 
     const fetchUsers = async () => {
-      const response = await axios.get('/api/cusers/');
-      users.value = response.data.results;
-      filteredUsers.value = users.value;
+      const res = await axios.get('/api/cusers/');
+      users.value = res.data.results;
+      conversationUsers.value = [...res.data.results];
     };
 
     const fetchMessages = async (receiverId: number) => {
-      const response = await axios.get(`/api/messages/?user=${receiverId}`);
-      messages.value = response.data.results;
-      updateLastMessage(receiverId, response.data.results.at(-1)?.message_text);
+      const res = await axios.get(`/api/messages/?user=${receiverId}`);
+      messages.value = res.data.results;
+      const lastMsg = res.data.results.at(-1)?.message_text;
+      if (lastMsg) updateLastMessage(receiverId, lastMsg);
     };
 
-    const updateLastMessage = (userId: number, message: string) => {
-      if (message) lastMessages.value[userId] = message;
+    const updateLastMessage = (partnerId: number, message: string) => {
+      lastMessages.value[partnerId] = message;
+      if (!conversationUsers.value.some(u => u.id === partnerId)) {
+        const user = users.value.find(u => u.id === partnerId);
+        if (user) conversationUsers.value.push(user);
+      }
     };
 
-    const selectUser = async (user: any) => {
+    const selectUser = async (user: User) => {
       selectedUser.value = user;
       await fetchMessages(user.id);
       setupWebSocket();
@@ -76,47 +86,56 @@ export default defineComponent({
 
     const sendMessage = async () => {
       if (!newMessage.value.trim() || !selectedUser.value) return;
-      const message = {
+
+      const payload = {
         receiver: selectedUser.value.id,
         message_text: newMessage.value,
       };
-      const response = await axios.post('/api/messages/', message);
-      messages.value.push(response.data);
-      updateLastMessage(selectedUser.value.id, response.data.message_text);
+
+      const res = await axios.post('/api/messages/', payload);
+      updateLastMessage(selectedUser.value.id, res.data.message_text);
       newMessage.value = '';
-      socket?.send(JSON.stringify(response.data));
-    };
-
-    const filterUsers = () => {
-      const query = searchQuery.value.toLowerCase();
-      filteredUsers.value = query.length >= 1
-        ? users.value.filter((u) => u.email.toLowerCase().includes(query))
-        : users.value;
-    };
-
-    const fetchUserProfile = async () => {
-      const response = await axios.get(`/api/profile/${userId}`);
-      userProfile.value = response.data;
+      // WebSocket ile gönder, sadece JSON veri
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          sender: res.data.sender,
+          receiver: res.data.receiver,
+          message_text: res.data.message_text,
+        }));
+      }
     };
 
     const setupWebSocket = () => {
       if (!selectedUser.value) return;
-      const roomName = userId < selectedUser.value.id
-        ? `${userId}-${selectedUser.value.id}`
-        : `${selectedUser.value.id}-${userId}`;
-      const wsUrl = `ws://localhost:8000/ws/chat/${roomName}/`;
+      const otherId = selectedUser.value.id;
+      const room = userId < otherId ? `${userId}-${otherId}` : `${otherId}-${userId}`;
+      const wsUrl = `ws://localhost:8000/ws/chat/${room}/`;
 
       if (socket) socket.close();
-
       socket = new WebSocket(wsUrl);
 
       socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.sender && data.receiver) {
+        const data: Message = JSON.parse(event.data);
+        if ([data.sender, data.receiver].includes(userId)) {
           messages.value.push(data);
           updateLastMessage(data.sender === userId ? data.receiver : data.sender, data.message_text);
         }
       };
+
+      socket.onclose = () => console.warn('WebSocket closed');
+      socket.onerror = (e) => console.error('WebSocket error', e);
+    };
+
+    const filterUsers = () => {
+      const q = searchQuery.value.toLowerCase();
+      conversationUsers.value = q
+        ? users.value.filter(u => u.email.toLowerCase().includes(q))
+        : [...users.value];
+    };
+
+    const fetchUserProfile = async () => {
+      const res = await axios.get(`/api/profile/${userId}`);
+      userProfile.value = res.data;
     };
 
     onMounted(() => {
@@ -130,19 +149,19 @@ export default defineComponent({
 
     return {
       users,
-      filteredUsers,
+      conversationUsers,
       messages,
-      newMessage,
       selectedUser,
+      newMessage,
       userId,
       searchQuery,
+      userProfile,
+      lastMessages,
       selectUser,
       sendMessage,
       filterUsers,
-      userProfile,
-      lastMessages,
     };
-  },
+  }
 });
 </script>
 
@@ -179,6 +198,7 @@ export default defineComponent({
 .last-message {
   font-size: 12px;
   color: #666;
+  margin-left: 8px;
 }
 .main {
   width: 75%;
