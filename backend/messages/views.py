@@ -17,6 +17,7 @@ class UserListView(generics.ListAPIView):
 class MessageViewSet(ModelViewSet):
       serializer_class = MessageSerializer
       permission_classes = [permissions.IsAuthenticated]
+      pagination_class = None
 
       def get_queryset(self):
             user = self.request.user

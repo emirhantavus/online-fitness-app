@@ -20,21 +20,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             message_text = data.get('message_text')
             sender_id = data.get('sender')
             receiver_id = data.get('receiver')
-
-            if not all([message_text, sender_id, receiver_id]):
-                await self.send(text_data=json.dumps({"error": "Invalid data"}))
-                return
-
-            message = await self.save_message(sender_id, receiver_id, message_text)
+            timestamp = data.get('timestamp')
+            msg_id = data.get('id')
 
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     'type': 'chat_message',
-                    'id': message.id,
-                    'message_text': message.message_text,
+                    'id': msg_id,
+                    'message_text': message_text,
                     'sender': sender_id,
                     'receiver': receiver_id,
+                    'timestamp': timestamp,
                 }
             )
         except Exception as e:
@@ -43,9 +40,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def chat_message(self, event):
         await self.send(text_data=json.dumps(event))
 
-    @database_sync_to_async
-    def save_message(self, sender_id, receiver_id, message_text):
-        User = get_user_model()
-        sender = User.objects.get(pk=sender_id)
-        receiver = User.objects.get(pk=receiver_id)
-        return Message.objects.create(sender=sender, receiver=receiver, message_text=message_text)
+    # @database_sync_to_async
+    # def save_message(self, sender_id, receiver_id, message_text):
+    #     User = get_user_model()
+    #     sender = User.objects.get(pk=sender_id)
+    #     receiver = User.objects.get(pk=receiver_id)
+    #     return Message.objects.create(sender=sender, receiver=receiver, message_text=message_text)

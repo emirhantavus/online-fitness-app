@@ -13,10 +13,16 @@
         <div class="chat-header">
           <h3>Chat with {{ selectedUser.email }}</h3>
         </div>
-        <div class="chat-messages">
-          <div v-for="msg in messages" :key="msg.id" class="message">
-            <strong>{{ msg.sender === userId ? userProfile.email : selectedUser.email }}:</strong> {{ msg.message_text }}
-          </div>
+        <div class="chat-messages" ref="chatBox">
+          <div v-if="sortedMessages.length > 0">
+      <div v-for="msg in sortedMessages" :key="msg.id" class="message">
+        <strong>{{ msg.sender === userId ? userProfile.email : selectedUser.email }}:</strong>
+        {{ msg.message_text }}
+      </div>
+    </div>
+<div v-else>
+  <p class="no-messages">Henüz mesaj yok veya yüklenemedi.</p>
+</div>
         </div>
         <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Type a message..." />
       </div>
@@ -28,7 +34,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import axios from '@/plugins/axios';
 
 interface User {
@@ -41,6 +47,7 @@ interface Message {
   sender: number;
   receiver: number;
   message_text: string;
+  timestamp?: string;
 }
 
 export default defineComponent({
@@ -55,7 +62,18 @@ export default defineComponent({
     const searchQuery = ref('');
     const userProfile = ref<User>({ id: 0, email: '' });
     const lastMessages = ref<Record<number, string>>({});
+    const chatBox = ref<HTMLElement | null>(null);
     let socket: WebSocket | null = null;
+
+    const sortedMessages = computed(() =>
+      [...messages.value].sort((a, b) => new Date(a.timestamp || '').getTime() - new Date(b.timestamp || '').getTime())
+    );
+
+    const scrollToBottom = () => {
+      nextTick(() => {
+        chatBox.value?.scrollTo({ top: chatBox.value.scrollHeight, behavior: 'smooth' });
+      });
+    };
 
     const fetchUsers = async () => {
       const res = await axios.get('/api/cusers/');
@@ -64,11 +82,23 @@ export default defineComponent({
     };
 
     const fetchMessages = async (receiverId: number) => {
-      const res = await axios.get(`/api/messages/?user=${receiverId}`);
-      messages.value = res.data.results;
-      const lastMsg = res.data.results.at(-1)?.message_text;
-      if (lastMsg) updateLastMessage(receiverId, lastMsg);
-    };
+  try {
+    const res = await axios.get(`/api/messages/?user=${receiverId}`);
+    const msgList = res.data?.results || res.data;
+    if (!Array.isArray(msgList)) {
+      console.error('Mesaj listesi düzgün gelmedi:', res.data);
+      messages.value = [];
+      return;
+    }
+    messages.value = msgList;
+    const lastMsg = msgList.length > 0 ? msgList[msgList.length - 1].message_text : undefined;
+    if (lastMsg) updateLastMessage(receiverId, lastMsg);
+    scrollToBottom();
+  } catch (error) {
+    console.error('Mesajlar çekilirken hata:', error);
+    messages.value = [];
+  }
+};
 
     const updateLastMessage = (partnerId: number, message: string) => {
       lastMessages.value[partnerId] = message;
@@ -86,23 +116,20 @@ export default defineComponent({
 
     const sendMessage = async () => {
       if (!newMessage.value.trim() || !selectedUser.value) return;
-
       const payload = {
         receiver: selectedUser.value.id,
         message_text: newMessage.value,
       };
-
       const res = await axios.post('/api/messages/', payload);
-      updateLastMessage(selectedUser.value.id, res.data.message_text);
+
+      socket?.send(JSON.stringify({
+        sender: res.data.sender,
+        receiver: res.data.receiver,
+        message_text: res.data.message_text,
+        timestamp: res.data.timestamp,
+        id: res.data.id,
+      }));
       newMessage.value = '';
-      // WebSocket ile gönder, sadece JSON veri
-      if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          sender: res.data.sender,
-          receiver: res.data.receiver,
-          message_text: res.data.message_text,
-        }));
-      }
     };
 
     const setupWebSocket = () => {
@@ -114,13 +141,14 @@ export default defineComponent({
       if (socket) socket.close();
       socket = new WebSocket(wsUrl);
 
-      socket.onmessage = (event) => {
-        const data: Message = JSON.parse(event.data);
-        if ([data.sender, data.receiver].includes(userId)) {
-          messages.value.push(data);
-          updateLastMessage(data.sender === userId ? data.receiver : data.sender, data.message_text);
-        }
-      };
+      socket.onmessage = async (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.sender !== userId && selectedUser.value?.id === data.sender || selectedUser.value?.id === data.receiver) {
+    messages.value.push(data);
+    scrollToBottom();
+  }
+};
 
       socket.onclose = () => console.warn('WebSocket closed');
       socket.onerror = (e) => console.error('WebSocket error', e);
@@ -150,7 +178,7 @@ export default defineComponent({
     return {
       users,
       conversationUsers,
-      messages,
+      sortedMessages,
       selectedUser,
       newMessage,
       userId,
@@ -160,6 +188,7 @@ export default defineComponent({
       selectUser,
       sendMessage,
       filterUsers,
+      chatBox,
     };
   }
 });
@@ -214,8 +243,9 @@ export default defineComponent({
 }
 .chat-messages {
   flex: 1;
+  max-height: 60vh;
   padding: 10px;
-  overflow-y: auto;
+  overflow-y: auto; 
   background-color: #f9f9f9;
   border: 1px solid #ddd;
   border-radius: 0 0 10px 10px;
