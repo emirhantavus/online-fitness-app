@@ -31,7 +31,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted } from 'vue';
+import { defineComponent, ref, watchEffect, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '@/plugins/axios';
 import defaultAvatar from '@/assets/default-avatar.png';
@@ -48,8 +48,12 @@ export default defineComponent({
     const router = useRouter();
     const menuLinks = ref<MenuLink[]>([]);
     const isMenuOpen = ref(false);
-    const loggedIn = ref(!!localStorage.getItem('access_token'));
+    const loggedIn = ref(false);
     const userProfile = ref<any>(null);
+
+    const checkLoginStatus = () => {
+      loggedIn.value = !!localStorage.getItem('access_token');
+    };
 
     const toggleMenu = () => {
       isMenuOpen.value = !isMenuOpen.value;
@@ -123,7 +127,13 @@ export default defineComponent({
     };
 
     onMounted(() => {
+      checkLoginStatus();
       loadMenuLinks();
+    });
+
+    // 🔄 Sayfa yenilemeden token değişimini algıla
+    watchEffect(() => {
+      checkLoginStatus();
     });
 
     return {
