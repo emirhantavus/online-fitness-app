@@ -6,3 +6,5 @@ __pycache__/
 backend/__pycache__/
 backend/staticfiles/
 frontend/node_modules/
+backend/.env
+production.env
